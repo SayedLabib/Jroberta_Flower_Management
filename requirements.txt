@@ -8,3 +8,4 @@ pydantic
 aiohttp
 pydantic-settings
 httpx
+pillow
