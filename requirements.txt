@@ -9,3 +9,4 @@ aiohttp
 pydantic-settings
 httpx
 pillow
+pydantic[email]
