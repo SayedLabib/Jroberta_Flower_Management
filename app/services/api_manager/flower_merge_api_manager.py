@@ -1,6 +1,8 @@
 import openai
 import base64
 import io
+import uuid
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from PIL import Image
 import requests
@@ -28,7 +30,7 @@ class FlowerMergeAPIManager:
         return True
 
     def merge_flowers(self, request: FlowerMergeRequest) -> FlowerMergeResponse:
-        """Main method to merge flower images using DALL-E model"""
+        """Main method to merge flower images using GPT-4 vision analysis and DALL-E 3 generation"""
         try:
             # Validate inputs
             self._validate_images(request.images)
@@ -37,47 +39,82 @@ class FlowerMergeAPIManager:
                 raise ValueError("Exactly 4 images are required")
             
             if settings.debug:
-                print(f"Creating flower bouquet from 4 flower images...")
+                print(f"Creating flower bouquet from 4 uploaded flower images...")
 
-            # Create a robust prompt for DALL-E to generate a flower bouquet using only the provided flowers
-            generation_prompt = """Create a realistic flower bouquet using ONLY the exact 4 flower types, colors, and varieties shown in the uploaded images. 
+            # Encode the uploaded images to base64 for analysis
+            encoded_images = []
+            for i, image_bytes in enumerate(request.images):
+                encoded_image = self._encode_image_to_base64(image_bytes)
+                encoded_images.append(encoded_image)
+                if settings.debug:
+                    print(f"Encoded image {i+1} for analysis")
 
-STRICT REQUIREMENTS:
-- Use EXCLUSIVELY the 4 specific flower types from the provided images
-- DO NOT add any other flowers, greenery, or decorative elements
-- DO NOT use your imagination to create additional flower varieties
-- Maintain the exact colors, shapes, and characteristics of the uploaded flowers
-- Create a simple, natural bouquet arrangement
-- Use realistic proportions and natural flower positioning
-- Clean white or neutral background
-- No artistic effects, filters, or stylized elements
-- Photorealistic quality that matches the input flower images
+            # First, analyze the uploaded flower images using GPT-4 vision to understand what flowers we have
+            analysis_messages = [
+                {
+                    "role": "system",
+                    "content": "You are an expert botanist. Analyze each flower image and identify the exact flower type. Return only the flower names, one per image, in order."
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Identify the specific flower type in each of these 4 images. Respond with exactly 4 flower names separated by commas, like: rose, daisy, tulip, carnation. Be precise and use common flower names."
+                        }
+                    ] + [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{encoded_image}"
+                            }
+                        } for encoded_image in encoded_images
+                    ]
+                }
+            ]
 
-FORBIDDEN:
-- Adding extra flowers not shown in the images
-- Changing flower colors from the originals
-- Adding leaves, stems, or greenery not present in originals
-- Using fantasy or stylized flower designs
-- Adding decorative elements like ribbons, vases, or backgrounds
+            # Get flower identification from GPT-4 vision
+            flower_analysis = self.client.chat.completions.create(
+                model=settings.open_ai_model,
+                messages=analysis_messages,
+                max_tokens=100,
+                temperature=0.3
+            )
+            
+            identified_flowers = flower_analysis.choices[0].message.content.strip()
+            
+            if settings.debug:
+                print(f"Identified flowers: {identified_flowers}")
 
-Generate a straightforward, realistic flower bouquet that combines ONLY these exact 4 flower types as they appear in the uploaded images."""
+            # Create a simple, effective prompt for DALL-E based on the identified flowers
+            generation_prompt = f"A realistic photograph of a beautiful flower bouquet arranged together with these 4 flowers: {identified_flowers}. The flowers are arranged in a proper bouquet formation with stems bundled together, wrapped with ribbon or paper. Professional florist arrangement, natural lighting, photorealistic style.No scattered flowers, proper bouquet composition."
 
             if settings.debug:
                 print("Generating flower bouquet with DALL-E...")
+                print(f"Using prompt: {generation_prompt}")
 
-            # Generate image using DALL-E model
+            # Use DALL-E for image generation with high quality for realism
             image_response = self.client.images.generate(
                 model="dall-e-3",
                 prompt=generation_prompt,
                 size="1024x1024",
-                quality="standard",
+                quality="hd",  # Use HD quality for more realistic results
+                style="natural",  # Use natural style instead of vivid
                 response_format="url",
                 n=1
             )
             
             image_url = image_response.data[0].url
 
-            # Generate a simple title for the bouquet
+            if settings.debug:
+                print(f"Generated image URL: {image_url}")
+
+
+
+
+
+
+            # Generate a simple title for the bouquet based on identified flowers
             title_messages = [
                 {
                     "role": "system",
@@ -85,12 +122,12 @@ Generate a straightforward, realistic flower bouquet that combines ONLY these ex
                 },
                 {
                     "role": "user",
-                    "content": "Create a simple descriptive title (maximum 6 words) for a beautiful flower bouquet made from 4 different flower types."
+                    "content": f"Create a simple descriptive title (maximum 6 words) for a beautiful flower bouquet made with these flowers: {identified_flowers}"
                 }
             ]
 
             title_response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=settings.open_ai_model,  # Use gpt-4o from settings
                 messages=title_messages,
                 max_tokens=30,
                 temperature=0.5
