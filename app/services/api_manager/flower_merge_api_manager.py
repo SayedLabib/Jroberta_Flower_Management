@@ -75,7 +75,7 @@ class FlowerMergeAPIManager:
 
             # Get flower identification from GPT-4 vision
             flower_analysis = self.client.chat.completions.create(
-                model=settings.open_ai_model,
+                model="gpt-4o-mini",  # Use gpt-4o-mini which has vision capabilities
                 messages=analysis_messages,
                 max_tokens=100,
                 temperature=0.3
@@ -87,22 +87,34 @@ class FlowerMergeAPIManager:
                 print(f"Identified flowers: {identified_flowers}")
 
             # Create a simple, effective prompt for DALL-E based on the identified flowers
-            generation_prompt = f"A realistic photograph of a beautiful flower bouquet arranged together with these 4 flowers: {identified_flowers}. The flowers are arranged in a proper bouquet formation with stems bundled together, wrapped with ribbon or paper. Professional florist arrangement, natural lighting, photorealistic style.No scattered flowers, proper bouquet composition."
+            generation_prompt = f"A realistic photograph of a beautiful flower bouquet arranged together with these 4 flowers: {identified_flowers}. The flowers are arranged in a proper bouquet formation with stems bundled together, wrapped with ribbon or paper. Professional florist arrangement, natural lighting, photorealistic style with a soft background. No scattered flowers, proper bouquet composition."
 
             if settings.debug:
                 print("Generating flower bouquet with DALL-E...")
                 print(f"Using prompt: {generation_prompt}")
 
-            # Use DALL-E for image generation with high quality for realism
-            image_response = self.client.images.generate(
-                model="dall-e-3",
-                prompt=generation_prompt,
-                size="1024x1024",
-                quality="hd",  # Use HD quality for more realistic results
-                style="natural",  # Use natural style instead of vivid
-                response_format="url",
-                n=1
-            )
+            # Use DALL-E for image generation - try DALL-E 2 first for better compatibility
+            try:
+                image_response = self.client.images.generate(
+                    model="dall-e-3",
+                    prompt=generation_prompt,
+                    size="1024x1024",
+                    quality="hd",  # Use HD quality for more realistic results
+                    style="natural",  # Use natural style instead of vivid
+                    response_format="url",
+                    n=1
+                )
+            except Exception as dalle3_error:
+                if settings.debug:
+                    print(f"DALL-E 3 failed, trying DALL-E 2: {str(dalle3_error)}")
+                # Fallback to DALL-E 2 if DALL-E 3 is not available
+                image_response = self.client.images.generate(
+                    model="dall-e-2",
+                    prompt=generation_prompt,
+                    size="1024x1024",
+                    response_format="url",
+                    n=1
+                )
             
             image_url = image_response.data[0].url
 
@@ -127,7 +139,7 @@ class FlowerMergeAPIManager:
             ]
 
             title_response = self.client.chat.completions.create(
-                model=settings.open_ai_model,  # Use gpt-4o from settings
+                model="gpt-4o-mini",  # Use gpt-4o-mini for title generation
                 messages=title_messages,
                 max_tokens=30,
                 temperature=0.5

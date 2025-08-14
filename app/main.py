@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from app.services.Flower_merge.flower_merge_routes import router as flower_merge_router
 from app.core.config import settings
 
@@ -15,9 +14,6 @@ app = FastAPI(
 
 # Include routers
 app.include_router(flower_merge_router)
-
-# Mount static files directory
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Root endpoint
 @app.get("/")
