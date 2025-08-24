@@ -73,21 +73,56 @@ class FlowerMergeAPIManager:
                 }
             ]
 
-            # Get flower identification from GPT-4 vision
+            # Get detailed flower analysis from GPT-4 vision for each flower
+            detailed_analysis_messages = [
+                {
+                    "role": "system",
+                    "content": "You are an expert botanist and florist. Analyze each flower image in detail and provide comprehensive information about flower characteristics."
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "For each of these 4 flower images, analyze and provide detailed information about: 1) Flower name/type, 2) Primary color(s). Format your response as: ' [flower name] - [color] for each image."
+                        }
+                    ] + [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{encoded_image}"
+                            }
+                        } for encoded_image in encoded_images
+                    ]
+                }
+            ]
+
+            # Get basic flower identification from GPT-4 vision
             flower_analysis = self.client.chat.completions.create(
-                model="gpt-4o-mini",  # Use gpt-4o-mini which has vision capabilities
+                model="gpt-4o",  # Use gpt-4o which has better vision capabilities
                 messages=analysis_messages,
                 max_tokens=100,
                 temperature=0.3
             )
             
             identified_flowers = flower_analysis.choices[0].message.content.strip()
+
+            # Get detailed flower characteristics using GPT-4 Vision
+            detailed_analysis = self.client.chat.completions.create(
+                model="gpt-4o",  # Use gpt-4o for detailed vision analysis
+                messages=detailed_analysis_messages,
+                max_tokens=500,
+                temperature=0.3
+            )
+            
+            flower_details = detailed_analysis.choices[0].message.content.strip()
             
             if settings.debug:
                 print(f"Identified flowers: {identified_flowers}")
+                print(f"Detailed flower analysis: {flower_details}")
 
             # Create a simple, effective prompt for DALL-E based on the identified flowers
-            generation_prompt = f"A realistic photograph of a beautiful flower bouquet arranged together with these 4 flowers: {identified_flowers}. The flowers are arranged in a proper bouquet formation with stems bundled together, wrapped with ribbon or paper. Professional florist arrangement, natural lighting, photorealistic style with a soft background. No scattered flowers, proper bouquet composition."
+            generation_prompt = f"A realistic photograph of a beautiful flower bouquet arranged together with these 4 flowers: {flower_details}. The flowers are arranged in a proper bouquet formation with stems bundled together, wrapped with ribbon or paper. Professional florist arrangement, natural lighting, photorealistic style with a soft background. No scattered flowers, proper bouquet composition."
 
             if settings.debug:
                 print("Generating flower bouquet with DALL-E...")
