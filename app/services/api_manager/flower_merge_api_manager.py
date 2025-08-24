@@ -122,7 +122,7 @@ class FlowerMergeAPIManager:
                 print(f"Detailed flower analysis: {flower_details}")
 
             # Create a simple, effective prompt for DALL-E based on the identified flowers
-            generation_prompt = f"A realistic photograph of a beautiful flower bouquet arranged together with these 4 flowers: {flower_details}. The flowers are arranged in a proper bouquet formation with stems bundled together, wrapped with ribbon or paper. Professional florist arrangement, natural lighting, photorealistic style with a soft background. No scattered flowers, proper bouquet composition."
+            generation_prompt = f"A realistic photograph of a beautiful flower bouquet arranged together with these 4 flowers: {flower_details}. The flowers are arranged in a proper bouquet formation with stems bundled together, wrapped with ribbon or paper. Professional florist arrangement, natural lighting, photorealistic style with a soft background. No scattered flowers, proper bouquet composition like a wedding decoration style"
 
             if settings.debug:
                 print("Generating flower bouquet with DALL-E...")
