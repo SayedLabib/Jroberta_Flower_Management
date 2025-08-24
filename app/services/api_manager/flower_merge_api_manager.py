@@ -112,7 +112,7 @@ class FlowerMergeAPIManager:
                 model="gpt-4o",  # Use gpt-4o for detailed vision analysis
                 messages=detailed_analysis_messages,
                 max_tokens=500,
-                temperature=0.3
+                temperature=0.7
             )
             
             flower_details = detailed_analysis.choices[0].message.content.strip()
