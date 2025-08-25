@@ -24,12 +24,19 @@ class FlowerMergeAPIManager:
                 raise ValueError(f"Image too large. Maximum size is {settings.max_file_size} bytes")
     
     def _analyze_flowers(self, images: List[bytes]) -> str:
-        """Analyze flower images and return description"""
+        """Analyze flower images and return detailed description"""
         # Convert images to base64
         encoded_images = [base64.b64encode(img).decode('utf-8') for img in images]
         
-        # Create simple prompt for flower analysis
-        content = [{"type": "text", "text": "Identify the flowers in these images and describe their colors. Format: 'flower1 - color1, flower2 - color2, etc.'"}]
+        # Create detailed prompt for flower analysis
+        content = [{"type": "text", "text": """Analyze these flowers in extreme detail for a flower arrangement:
+        1. Identify each flower species precisely (e.g., 'garden rose' instead of just 'rose')
+        2. Describe the exact color shade (e.g., 'pale dusty pink' instead of just 'pink')
+        3. Note any notable textures or petal formations
+        4. Estimate the approximate size/scale
+        
+        Format your response as: 'flower1 - detailed color description, flower2 - detailed color description, etc.'
+        Be extremely specific about colors as this will be used to generate a realistic image."""}]
         
         for encoded_image in encoded_images:
             content.append({
@@ -37,26 +44,30 @@ class FlowerMergeAPIManager:
                 "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}
             })
         
-        # Get flower analysis
+        # Get flower analysis with increased token limit for more details
         response = self.client.chat.completions.create(
             model=settings.vision_model,
             messages=[{"role": "user", "content": content}],
-            max_tokens=200
+            max_tokens=500
         )
         
         return response.choices[0].message.content.strip()
     
     def _generate_bouquet_image(self, flower_description: str) -> str:
         """Generate bouquet image using DALL-E"""
-        prompt = f"""A highly detailed, photorealistic photograph of a professionally arranged flower bouquet. 
-The bouquet features the following flowers: {flower_description}. 
-All flowers are tightly grouped into a classic bouquet shape with stems neatly bundled together and wrapped with a soft satin ribbon or floral paper in neutral tones (e.g., cream, white, or ivory). 
-
-Style: Professional florist arrangement, wedding-style elegance, natural daylight lighting, shallow depth of field with a softly blurred background. 
-Focus on texture and realism: visible petal veins, subtle shadows, natural color gradients, and lifelike greenery. 
-No scattered petals, no loose stems, no artificial or surreal elements. 
-Composition should be balanced and centered, suitable for bridal or formal event decor. 
-High-resolution, 8K quality, studio photography style."""
+        prompt = f"""Photorealistic photograph of a fresh flower bouquet taken by a professional botanical photographer.
+                    8K ultra high-definition, shot with a Canon EOS R5, natural soft window lighting, shallow depth of field.
+                    
+                    The bouquet prominently features: {flower_description}
+                    
+                    Key photographic elements:
+                    - Hyper-detailed textures showing individual petal veins and natural imperfections
+                    - Subtle color transitions with accurate botanical coloration (no artificial saturation)
+                    - Water droplets visible on some petals for freshness
+                    - Stems wrapped in simple cream floral paper with minimal styling
+                    - Shot against a neutral cream background with natural shadows
+                    
+                    This is NOT a stylized or artistic interpretation - it must look like a genuine photograph of real flowers."""
 
         try:
             # Try DALL-E 3 first
@@ -91,6 +102,37 @@ High-resolution, 8K quality, studio photography style."""
         
         return response.choices[0].message.content.strip().strip('"\'')
     
+    def _analyze_composition(self, images: List[bytes], flower_description: str) -> str:
+        """Analyze the composition and arrangement style from the uploaded images"""
+        # Convert images to base64 (use only first 3 images to stay within token limits)
+        encoded_images = [base64.b64encode(img).decode('utf-8') for img in images[:3]]
+        
+        # Create prompt for composition analysis
+        content = [{"type": "text", "text": f"""Given these flower images and the description: '{flower_description}',
+        suggest a natural bouquet arrangement style that would look realistic with these flowers.
+        Consider:
+        1. Overall shape (round, cascading, asymmetrical, etc.)
+        2. Color distribution (focal points, color transitions)
+        3. Density and spacing of flowers
+        4. Suitable complementary greenery or filler flowers
+        
+        Keep your response concise (max 100 words) as it will be used in an image generation prompt."""}]
+        
+        for encoded_image in encoded_images:
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}
+            })
+        
+        # Get composition analysis
+        response = self.client.chat.completions.create(
+            model=settings.vision_model,
+            messages=[{"role": "user", "content": content}],
+            max_tokens=250
+        )
+        
+        return response.choices[0].message.content.strip()
+    
     def merge_flowers(self, request: FlowerMergeRequest) -> FlowerMergeResponse:
         """Create a flower bouquet from uploaded images"""
         try:
@@ -105,8 +147,14 @@ High-resolution, 8K quality, studio photography style."""
             if settings.debug:
                 print(f"Flowers identified: {flower_description}")
             
-            # Generate bouquet image
-            image_url = self._generate_bouquet_image(flower_description)
+            # Analyze composition style
+            composition_style = self._analyze_composition(request.images, flower_description)
+            if settings.debug:
+                print(f"Composition style: {composition_style}")
+            
+            # Generate bouquet image with enhanced prompt including composition
+            enhanced_description = f"{flower_description}. {composition_style}"
+            image_url = self._generate_bouquet_image(enhanced_description)
             if settings.debug:
                 print(f"Generated bouquet image: {image_url}")
             
