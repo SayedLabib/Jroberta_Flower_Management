@@ -1,9 +1,17 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 
 
 class FlowerMergeRequest(BaseModel):
-    images: List[bytes] = Field(..., description="List of exactly 4 flower images to merge")
+    images: List[bytes] = Field(..., description="List of 1-6 flower images to merge")
+    
+    @validator('images')
+    def validate_images(cls, v):
+        if not v:
+            raise ValueError('At least one image is required')
+        if len(v) > 6:
+            raise ValueError('Maximum 6 images allowed')
+        return v
 
 
 class FlowerMergeResponse(BaseModel):

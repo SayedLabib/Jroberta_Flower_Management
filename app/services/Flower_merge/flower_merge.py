@@ -13,10 +13,10 @@ class FlowerMergeService:
     ) -> FlowerMergeResponse:
         
         """
-        Process exactly 4 flower images and merge them into a bouquet
+        Process 1-6 flower images and merge them into a bouquet
         
         Args:
-            images: List of exactly 4 flower image bytes
+            images: List of 1-6 flower image bytes
             
         Returns:
             FlowerMergeResponse with title and image URL

@@ -67,7 +67,7 @@ docker-compose -f docker-compose.yml up -d --build
 
 ## API Endpoints
 
-- `POST /flower-merge/upload` - Upload 4 flower images to create a bouquet
+- `POST /flower-merge/upload` - Upload 4-6 flower images to create a bouquet (simple multi-file upload)
 - `GET /flower-merge/health` - Service health check
 - `GET /health` - Application health check
 - `GET /docs` - Interactive API documentation
@@ -79,8 +79,9 @@ Key environment variables in `.env`:
 - `OPEN_AI_API_KEY` - Your OpenAI API key (required)
 - `OPEN_AI_MODEL` - OpenAI model to use (default: gpt-4o)
 - `DEBUG` - Enable debug mode (default: false)
-- `MAX_IMAGES_PER_REQUEST` - Maximum images per request (default: 4)
-- `MAX_FILE_SIZE` - Maximum file size in bytes (default: 5MB)
+- `MIN_IMAGES_PER_REQUEST` - Minimum images per request (default: 4)
+- `MAX_IMAGES_PER_REQUEST` - Maximum images per request (default: 6)
+- `MAX_FILE_SIZE` - Maximum file size in bytes (default: 10MB)
 
 ## Troubleshooting
 
@@ -136,6 +137,6 @@ OPEN_AI_API_KEY=
 
 OPEN_AI_MODEL=gpt-4o
 OPEN_AI_CHAT_MODEL=gpt-3.5-turbo
-MAX_IMAGES_PER_REQUEST=4
+MAX_IMAGES_PER_REQUEST=6
 MAX_FILE_SIZE=10485760
-DEBUG=True**
+DEBUG=True

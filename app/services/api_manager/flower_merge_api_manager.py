@@ -19,9 +19,11 @@ class FlowerMergeAPIManager:
         return base64.b64encode(image_bytes).decode('utf-8')
 
     def _validate_images(self, images: List[bytes]) -> bool:
-        """Validate image inputs - require exactly 4 images"""
-        if len(images) != 4:
-            raise ValueError(f"Exactly 4 images required. Received: {len(images)}")
+        """Validate image inputs - allow 1-6 images"""
+        if len(images) < 1:
+            raise ValueError("At least 1 image is required")
+        if len(images) > 6:
+            raise ValueError(f"Maximum 6 images allowed. Received: {len(images)}")
         
         for image_bytes in images:
             if len(image_bytes) > settings.max_file_size:
@@ -35,11 +37,9 @@ class FlowerMergeAPIManager:
             # Validate inputs
             self._validate_images(request.images)
             
-            if len(request.images) != 4:
-                raise ValueError("Exactly 4 images are required")
-            
+            num_images = len(request.images)
             if settings.debug:
-                print(f"Creating flower bouquet from 4 uploaded flower images...")
+                print(f"Creating flower bouquet from {num_images} uploaded flower images...")
 
             # Encode the uploaded images to base64 for analysis
             encoded_images = []
@@ -60,7 +60,7 @@ class FlowerMergeAPIManager:
                     "content": [
                         {
                             "type": "text",
-                            "text": "Identify the specific flower type in each of these 4 images. Respond with exactly 4 flower names separated by commas, like: rose, daisy, tulip, carnation. Be precise and use common flower names."
+                            "text": f"Identify the specific flower type in each of these {num_images} images. Respond with exactly {num_images} flower names separated by commas. Be precise and use common flower names."
                         }
                     ] + [
                         {
@@ -84,7 +84,7 @@ class FlowerMergeAPIManager:
                     "content": [
                         {
                             "type": "text",
-                            "text": "For each of these 4 flower images, analyze and provide detailed information about: 1) Flower name/type, 2) Primary color(s). Format your response as: ' [flower name] - [color] for each image."
+                            "text": f"For each of these {num_images} flower images, analyze and provide detailed information about: 1) Flower name/type, 2) Primary color(s). Format your response as: ' [flower name] - [color] for each image."
                         }
                     ] + [
                         {
@@ -122,7 +122,7 @@ class FlowerMergeAPIManager:
                 print(f"Detailed flower analysis: {flower_details}")
 
             # Create a simple, effective prompt for DALL-E based on the identified flowers
-            generation_prompt = f"A realistic photograph of a beautiful flower bouquet arranged together with these 4 flowers: {flower_details}. The flowers are arranged in a proper bouquet formation with stems bundled together, wrapped with ribbon or paper. Professional florist arrangement, natural lighting, photorealistic style with a soft background. No scattered flowers, proper bouquet composition like a wedding decoration style"
+            generation_prompt = f"A realistic photograph of a beautiful flower bouquet arranged together with these {num_images} flowers: {flower_details}. The flowers are arranged in a proper bouquet formation with stems bundled together, wrapped with ribbon or paper. Professional florist arrangement, natural lighting, photorealistic style with a soft background. No scattered flowers, proper bouquet composition like a wedding decoration style"
 
             if settings.debug:
                 print("Generating flower bouquet with DALL-E...")

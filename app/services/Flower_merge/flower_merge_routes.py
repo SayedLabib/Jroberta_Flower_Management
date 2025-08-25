@@ -1,73 +1,89 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from fastapi.responses import Response
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from typing import List
 from app.services.Flower_merge.flower_merge import flower_merge_service
 from app.services.Flower_merge.flower_merge_schema import FlowerMergeResponse
 from app.core.config import settings
 
-router = APIRouter(prefix="/flower-merge", tags=["Flower flourishment"])
+router = APIRouter(prefix="/flower-merge", tags=["Flower Bouquet Creation"])
 
 @router.post("/upload", response_model=FlowerMergeResponse)
-async def upload_flower_image(
-        files: List[UploadFile] = File(..., description="Exactly 4 flower images required")
+async def upload_flower_images(
+    images: List[UploadFile] = File(..., description="Upload 4-6 flower images to create a bouquet")
 ):
-    
     """
-    Merge exactly 4 flower images into a beautiful floral bouquet.
+    Create a beautiful flower bouquet from 4-6 flower images.
     
-    This endpoint uses DALL-E to create a flower bouquet from the provided images.
-
+    Requirements:
+    - Minimum: 4 images
+    - Maximum: 6 images
+    - Supported formats: JPG, PNG, GIF, BMP, WEBP
+    - Max file size: 10MB per image
+    
+    The AI will generate a beautiful bouquet arrangement from your flower images.
     """
-
+    
     try:
-
-        if len(files) != 4:
-            raise HTTPException(status_code=400, detail="Exactly 4 images are required.")
+        # Validate number of images
+        if len(images) < settings.min_images_per_request:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Minimum {settings.min_images_per_request} images required. You uploaded {len(images)} images."
+            )
         
-        # Read validate files
+        if len(images) > settings.max_images_per_request:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Maximum {settings.max_images_per_request} images allowed. You uploaded {len(images)} images."
+            )
+        
+        # Validate and process each image
         image_bytes_list = []
-
-        for file in files:
-            # valid content type
-            if not file.content_type or not file.content_type.startswith("image/"):
-                raise HTTPException(status_code=400, detail=f"Invalid file type: {file.filename}. Only image files are allowed.")
+        
+        for i, image in enumerate(images, 1):
+            # Validate file type
+            if not image.content_type or not image.content_type.startswith("image/"):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Image {i} ({image.filename}) is not a valid image file. Only image files are allowed."
+                )
             
-            # Read file content
-            content = await file.read()
-
-            # validate file size
+            # Read image content
+            content = await image.read()
+            
+            # Validate file size
             if len(content) > settings.max_file_size:
-                raise HTTPException(status_code=400, detail=f"File {file.filename} exceeds the maximum size of {settings.max_file_size / (1024 * 1024)} MB.")
+                max_size_mb = settings.max_file_size / (1024 * 1024)
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Image {i} ({image.filename}) exceeds maximum size of {max_size_mb}MB."
+                )
             
             image_bytes_list.append(content)
-
-        # Process the flower merge after collecting all images
-        result = await flower_merge_service.process_flower_merge(
-            images=image_bytes_list
-        )
-
+        
+        # Generate bouquet
+        result = await flower_merge_service.process_flower_merge(images=image_bytes_list)
+        
         return result
         
     except HTTPException:
         raise
     except Exception as e:
         if settings.debug:
-            print(f"Error in merge_flowers endpoint: {str(e)}")
+            print(f"Error in upload_flower_images: {str(e)}")
         raise HTTPException(
             status_code=500, 
-            detail=f"Internal server error during flower merge: {str(e)}"
+            detail=f"Internal server error: {str(e)}"
         )
-    
+
 @router.get("/health")
 async def health_check():
     """Health check endpoint for the flower merge service"""
     return {
         "status": "healthy",
         "service": "flower-merge",
-        "required_images": 4,
-        "max_file_size": settings.max_file_size,
-        "generation_model": "dall-e-3",
-        "features": ["4 flower images", "automatic bouquet creation"],
-        "output_format": "PNG (fixed)",
-        "debug": f"Fixed to {settings.debug}"
+        "min_images": settings.min_images_per_request,
+        "max_images": settings.max_images_per_request,
+        "max_file_size_mb": settings.max_file_size / (1024 * 1024),
+        "supported_formats": ["JPG", "PNG", "GIF", "BMP", "WEBP"],
+        "ai_model": "DALL-E 3"
     }

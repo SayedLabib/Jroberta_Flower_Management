@@ -12,8 +12,9 @@ services:
       - OPEN_AI_API_KEY=${OPEN_AI_API_KEY}
       - OPEN_AI_MODEL=${OPEN_AI_MODEL:-gpt-4o}
       - DEBUG=${DEBUG:-false}
-      - MAX_IMAGES_PER_REQUEST=${MAX_IMAGES_PER_REQUEST:-4}
-      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-5242880}  # 5MB default
+      - MIN_IMAGES_PER_REQUEST=${MIN_IMAGES_PER_REQUEST:-4}
+      - MAX_IMAGES_PER_REQUEST=${MAX_IMAGES_PER_REQUEST:-6}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-10485760}  # 10MB default
     volumes:
       # Mount app directory for development (optional - remove for production)
       - ./app:/app/app:ro

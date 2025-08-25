@@ -9,8 +9,9 @@ class Settings(BaseSettings):
     debug: bool = Field(False, env="DEBUG")
 
     # Essential fields for multi image processing
-    max_images_per_request: int = Field(4, env="MAX_IMAGES_PER_REQUEST")
-    max_file_size: int = Field(10 * 720 * 720, env="MAX_FILE_SIZE")  # 10 MB
+    min_images_per_request: int = Field(4, env="MIN_IMAGES_PER_REQUEST")
+    max_images_per_request: int = Field(6, env="MAX_IMAGES_PER_REQUEST")
+    max_file_size: int = Field(10 * 1024 * 1024, env="MAX_FILE_SIZE")  # 10 MB
 
     class Config:
         env_file = ".env"
