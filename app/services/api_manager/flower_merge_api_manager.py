@@ -1,200 +1,127 @@
-import openai
 import base64
-import io
-import uuid
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-from PIL import Image
-import requests
+from typing import List
+import openai
 from app.core.config import settings
 from app.services.Flower_merge.flower_merge_schema import FlowerMergeRequest, FlowerMergeResponse
 
 
 class FlowerMergeAPIManager:
+    """Simple API manager for creating flower bouquets using OpenAI"""
+    
     def __init__(self):
         self.client = openai.OpenAI(api_key=settings.open_ai_api_key)
-
-    def _encode_image_to_base64(self, image_bytes: bytes) -> str:
-        """Convert image bytes to base64 string for OpenAI API"""
-        return base64.b64encode(image_bytes).decode('utf-8')
-
-    def _validate_images(self, images: List[bytes]) -> bool:
-        """Validate image inputs - allow 1-6 images"""
-        if len(images) < 1:
-            raise ValueError("At least 1 image is required")
-        if len(images) > 6:
-            raise ValueError(f"Maximum 6 images allowed. Received: {len(images)}")
+    
+    def _validate_images(self, images: List[bytes]) -> None:
+        """Validate uploaded images"""
+        if len(images) < settings.min_images_per_request:
+            raise ValueError(f"Need at least {settings.min_images_per_request} images")
+        
+        if len(images) > settings.max_images_per_request:
+            raise ValueError(f"Too many images. Maximum is {settings.max_images_per_request}")
         
         for image_bytes in images:
             if len(image_bytes) > settings.max_file_size:
-                raise ValueError(f"Image size too large. Maximum allowed: {settings.max_file_size} bytes")
+                raise ValueError(f"Image too large. Maximum size is {settings.max_file_size} bytes")
+    
+    def _analyze_flowers(self, images: List[bytes]) -> str:
+        """Analyze flower images and return description"""
+        # Convert images to base64
+        encoded_images = [base64.b64encode(img).decode('utf-8') for img in images]
         
-        return True
+        # Create simple prompt for flower analysis
+        content = [{"type": "text", "text": "Identify the flowers in these images and describe their colors. Format: 'flower1 - color1, flower2 - color2, etc.'"}]
+        
+        for encoded_image in encoded_images:
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}
+            })
+        
+        # Get flower analysis
+        response = self.client.chat.completions.create(
+            model=settings.vision_model,
+            messages=[{"role": "user", "content": content}],
+            max_tokens=200
+        )
+        
+        return response.choices[0].message.content.strip()
+    
+    def _generate_bouquet_image(self, flower_description: str) -> str:
+        """Generate bouquet image using DALL-E"""
+        prompt = f"""A highly detailed, photorealistic photograph of a professionally arranged flower bouquet. 
+The bouquet features the following flowers: {flower_description}. 
+All flowers are tightly grouped into a classic bouquet shape with stems neatly bundled together and wrapped with a soft satin ribbon or floral paper in neutral tones (e.g., cream, white, or ivory). 
 
-    def merge_flowers(self, request: FlowerMergeRequest) -> FlowerMergeResponse:
-        """Main method to merge flower images using GPT-4 vision analysis and DALL-E 3 generation"""
+Style: Professional florist arrangement, wedding-style elegance, natural daylight lighting, shallow depth of field with a softly blurred background. 
+Focus on texture and realism: visible petal veins, subtle shadows, natural color gradients, and lifelike greenery. 
+No scattered petals, no loose stems, no artificial or surreal elements. 
+Composition should be balanced and centered, suitable for bridal or formal event decor. 
+High-resolution, 8K quality, studio photography style."""
+
         try:
-            # Validate inputs
+            # Try DALL-E 3 first
+            response = self.client.images.generate(
+                model=settings.image_model_primary,
+                prompt=prompt,
+                size="1024x1024",
+                quality="hd",
+                style="natural"
+            )
+            return response.data[0].url
+            
+        except Exception:
+            # Fallback to DALL-E 2
+            response = self.client.images.generate(
+                model=settings.image_model_fallback,
+                prompt=prompt,
+                size="1024x1024"
+            )
+            return response.data[0].url
+    
+    def _generate_title(self, flower_description: str) -> str:
+        """Generate a simple title for the bouquet"""
+        response = self.client.chat.completions.create(
+            model=settings.chat_model,
+            messages=[{
+                "role": "user",
+                "content": f"Create a short bouquet title (max 5 words) for: {flower_description}"
+            }],
+            max_tokens=20
+        )
+        
+        return response.choices[0].message.content.strip().strip('"\'')
+    
+    def merge_flowers(self, request: FlowerMergeRequest) -> FlowerMergeResponse:
+        """Create a flower bouquet from uploaded images"""
+        try:
+            # Validate images
             self._validate_images(request.images)
             
-            num_images = len(request.images)
             if settings.debug:
-                print(f"Creating flower bouquet from {num_images} uploaded flower images...")
-
-            # Encode the uploaded images to base64 for analysis
-            encoded_images = []
-            for i, image_bytes in enumerate(request.images):
-                encoded_image = self._encode_image_to_base64(image_bytes)
-                encoded_images.append(encoded_image)
-                if settings.debug:
-                    print(f"Encoded image {i+1} for analysis")
-
-            # First, analyze the uploaded flower images using GPT-4 vision to understand what flowers we have
-            analysis_messages = [
-                {
-                    "role": "system",
-                    "content": "You are an expert botanist. Analyze each flower image and identify the exact flower type. Return only the flower names, one per image, in order."
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"Identify the specific flower type in each of these {num_images} images. Respond with exactly {num_images} flower names separated by commas. Be precise and use common flower names."
-                        }
-                    ] + [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{encoded_image}"
-                            }
-                        } for encoded_image in encoded_images
-                    ]
-                }
-            ]
-
-            # Get detailed flower analysis from GPT-4 vision for each flower
-            detailed_analysis_messages = [
-                {
-                    "role": "system",
-                    "content": "You are an expert botanist and florist. Analyze each flower image in detail and provide comprehensive information about flower characteristics."
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"For each of these {num_images} flower images, analyze and provide detailed information about: 1) Flower name/type, 2) Primary color(s). Format your response as: ' [flower name] - [color] for each image."
-                        }
-                    ] + [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{encoded_image}"
-                            }
-                        } for encoded_image in encoded_images
-                    ]
-                }
-            ]
-
-            # Get basic flower identification from GPT-4 vision
-            flower_analysis = self.client.chat.completions.create(
-                model="gpt-4o",  # Use gpt-4o which has better vision capabilities
-                messages=analysis_messages,
-                max_tokens=100,
-                temperature=0.3
-            )
+                print(f"Processing {len(request.images)} flower images...")
             
-            identified_flowers = flower_analysis.choices[0].message.content.strip()
-
-            # Get detailed flower characteristics using GPT-4 Vision
-            detailed_analysis = self.client.chat.completions.create(
-                model="gpt-4o",  # Use gpt-4o for detailed vision analysis
-                messages=detailed_analysis_messages,
-                max_tokens=500,
-                temperature=0.7
-            )
-            
-            flower_details = detailed_analysis.choices[0].message.content.strip()
-            
+            # Analyze flowers
+            flower_description = self._analyze_flowers(request.images)
             if settings.debug:
-                print(f"Identified flowers: {identified_flowers}")
-                print(f"Detailed flower analysis: {flower_details}")
-
-            # Create a simple, effective prompt for DALL-E based on the identified flowers
-            generation_prompt = f"A realistic photograph of a beautiful flower bouquet arranged together with these {num_images} flowers: {flower_details}. The flowers are arranged in a proper bouquet formation with stems bundled together, wrapped with ribbon or paper. Professional florist arrangement, natural lighting, photorealistic style with a soft background. No scattered flowers, proper bouquet composition like a wedding decoration style"
-
-            if settings.debug:
-                print("Generating flower bouquet with DALL-E...")
-                print(f"Using prompt: {generation_prompt}")
-
-            # Use DALL-E for image generation - try DALL-E 2 first for better compatibility
-            try:
-                image_response = self.client.images.generate(
-                    model="dall-e-3",
-                    prompt=generation_prompt,
-                    size="1024x1024",
-                    quality="hd",  # Use HD quality for more realistic results
-                    style="natural",  # Use natural style instead of vivid
-                    response_format="url",
-                    n=1
-                )
-            except Exception as dalle3_error:
-                if settings.debug:
-                    print(f"DALL-E 3 failed, trying DALL-E 2: {str(dalle3_error)}")
-                # Fallback to DALL-E 2 if DALL-E 3 is not available
-                image_response = self.client.images.generate(
-                    model="dall-e-2",
-                    prompt=generation_prompt,
-                    size="1024x1024",
-                    response_format="url",
-                    n=1
-                )
+                print(f"Flowers identified: {flower_description}")
             
-            image_url = image_response.data[0].url
-
+            # Generate bouquet image
+            image_url = self._generate_bouquet_image(flower_description)
             if settings.debug:
-                print(f"Generated image URL: {image_url}")
-
-
-
-
-
-
-            # Generate a simple title for the bouquet based on identified flowers
-            title_messages = [
-                {
-                    "role": "system",
-                    "content": "You create simple, descriptive titles for flower bouquets."
-                },
-                {
-                    "role": "user",
-                    "content": f"Create a simple descriptive title (maximum 6 words) for a beautiful flower bouquet made with these flowers: {identified_flowers}"
-                }
-            ]
-
-            title_response = self.client.chat.completions.create(
-                model="gpt-4o-mini",  # Use gpt-4o-mini for title generation
-                messages=title_messages,
-                max_tokens=30,
-                temperature=0.5
-            )
+                print(f"Generated bouquet image: {image_url}")
             
-            title = title_response.choices[0].message.content.strip().strip('"').strip("'")
-
+            # Generate title
+            title = self._generate_title(flower_description)
             if settings.debug:
                 print(f"Generated title: {title}")
-                print(f"Image URL: {image_url}")
-
-            return FlowerMergeResponse(
-                title=title,
-                imageURL=image_url
-            )
+            
+            return FlowerMergeResponse(title=title, imageURL=image_url)
             
         except Exception as e:
             if settings.debug:
-                print(f"Error in flower merge: {str(e)}")
-            raise Exception(f"Failed to merge flowers: {str(e)}")
+                print(f"Error: {str(e)}")
+            raise Exception(f"Failed to create bouquet: {str(e)}")
+
 
 # Create singleton instance
 flower_merge_api_manager = FlowerMergeAPIManager()
