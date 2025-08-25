@@ -58,16 +58,17 @@ class FlowerMergeAPIManager:
         prompt = f"""Photorealistic photograph of a fresh flower bouquet taken by a professional botanical photographer.
                     8K ultra high-definition, shot with a Canon EOS R5, natural soft window lighting, shallow depth of field.
                     
-                    The bouquet prominently features: {flower_description}
+                    The bouquet features exactly: {flower_description}
                     
                     Key photographic elements:
+                    - Extremely natural arrangement that looks hand-assembled by a skilled florist
                     - Hyper-detailed textures showing individual petal veins and natural imperfections
                     - Subtle color transitions with accurate botanical coloration (no artificial saturation)
                     - Water droplets visible on some petals for freshness
                     - Stems wrapped in simple cream floral paper with minimal styling
                     - Shot against a neutral cream background with natural shadows
                     
-                    This is NOT a stylized or artistic interpretation - it must look like a genuine photograph of real flowers."""
+                    This must be an ultra-realistic photograph of real flowers with botanical accuracy. Show the bouquet from a 3/4 angle to capture both the front arrangement and some side detail."""
 
         try:
             # Try DALL-E 3 first
@@ -112,9 +113,10 @@ class FlowerMergeAPIManager:
         suggest a natural bouquet arrangement style that would look realistic with these flowers.
         Consider:
         1. Overall shape (round, cascading, asymmetrical, etc.)
-        2. Color distribution (focal points, color transitions)
+        2. Color distribution - maintain the approximate color ratio/balance from the original images
         3. Density and spacing of flowers
         4. Suitable complementary greenery or filler flowers
+        5. Specify which flowers should be prominent/focal and which should be supporting
         
         Keep your response concise (max 100 words) as it will be used in an image generation prompt."""}]
         
