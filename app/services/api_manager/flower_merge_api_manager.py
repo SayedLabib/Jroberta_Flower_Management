@@ -37,10 +37,13 @@ class FlowerMergeAPIManager:
         for image_bytes in images:
             if len(image_bytes) > settings.max_file_size:
                 raise ValueError(f"Image too large. Maximum size is {settings.max_file_size} bytes")
-    
+
+    """Used GPT 4 vision model for better extraction of flower details"""
+
     def _analyze_flowers(self, images: List[bytes]) -> str:
+        
         """Analyze flower images and return detailed description"""
-        # Convert images to base64 with correct MIME types
+     
         content = [{"type": "text", "text": """Analyze these flowers in extreme detail for a flower arrangement:
         1. Identify each flower species precisely (e.g., 'garden rose' instead of just 'rose')
         2. Describe the exact color shade (e.g., 'pale dusty pink' instead of just 'pink')
@@ -58,31 +61,35 @@ class FlowerMergeAPIManager:
                 "image_url": {"url": f"data:{mime_type};base64,{encoded_image}"}
             })
         
-        # Get flower analysis with increased token limit for more details
+       
+
         response = self.client.chat.completions.create(
             model=settings.vision_model,
             messages=[{"role": "user", "content": content}],
-            max_tokens=500
+            max_tokens=600
         )
         
         return response.choices[0].message.content.strip()
     
     def _generate_bouquet_image(self, flower_description: str) -> str:
-        """Generate bouquet image using DALL-E with enhanced prompt"""
-        # Create a highly detailed, farbished prompt within 1500 character limit
-        base_prompt = f"""Award-winning studio photograph of an exquisite fresh flower bouquet: {flower_description}
 
-Photography: Canon EOS R5, 85mm macro lens, f/2.8, professional studio lighting with softbox diffusion, ultra-sharp 8K resolution, shallow depth of field creating beautiful bokeh. Composition: elegant 3/4 angle showcasing natural depth, dimensional layering, and organic asymmetrical balance.
 
-Styling: Hand-crafted artisanal arrangement by master florist with organic flow, premium technique showing natural movement. Delicate pearl-white silk ribbon wrap with subtle texture. Background: seamless pearl-gray gradient with subtle rim lighting creating gentle shadows and highlighting flower edges.
+        """ The prompt has been enhanced using the flower description which is holding the extracted flower details"""
 
-Details: Morning dew droplets on select petals for freshness, natural color saturation without artificial enhancement, botanical accuracy with visible individual petal veins and textures, authentic stem placement showing natural growth patterns. Each flower positioned to catch light beautifully.
+        # Create optimized farbished prompt within OpenAI's 1000-character hard limit
+        base_prompt = f"""Award-winning studio photograph: {flower_description}
 
-Style: luxury editorial photography for high-end botanical magazine, museum-quality floral art, commercial perfection with artistic soul, hyper-realistic rendering showing every natural imperfection that makes flowers beautiful."""
+Canon EOS R5, 85mm macro, f/2.8, professional lighting, 8K ultra-sharp, shallow depth of field, beautiful bokeh. Elegant 3/4 angle, natural depth, dimensional layers, organic asymmetry.
+
+Master florist artisanal arrangement, organic flow, premium technique, natural movement. Pearl-white silk ribbon, subtle texture. Pearl-gray gradient background, rim lighting, gentle shadows, edge highlights.
+
+Morning dew droplets, natural saturation, botanical accuracy, visible petal veins, authentic textures, natural stem placement, perfect light positioning.
+
+Luxury editorial style, high-end botanical magazine quality, museum-grade floral art, commercial perfection with artistic soul, hyper-realistic with natural imperfections."""
         
-        # Ensure we stay under 1500 characters for better quality
-        if len(base_prompt) > 1500:
-            base_prompt = base_prompt[:1497] + "..."
+        # Ensure we stay under OpenAI's 1000-character hard limit
+        if len(base_prompt) > 1000:
+            base_prompt = base_prompt[:997] + "..."
         
         print(f"DEBUG: Final prompt length: {len(base_prompt)} characters")
         
@@ -98,7 +105,9 @@ Style: luxury editorial photography for high-end botanical magazine, museum-qual
             return response.data[0].url
             
         except Exception:
-            # Fallback to DALL-E 2
+            
+            # Used a Fallback mechanism in case DALL-E 3 fails iut will swich back to DALL-E 2 for security purposes
+
             response = self.client.images.generate(
                 model=settings.image_model_fallback,
                 prompt=base_prompt,
@@ -107,7 +116,10 @@ Style: luxury editorial photography for high-end botanical magazine, museum-qual
             return response.data[0].url
     
     def _generate_title(self, flower_description: str) -> str:
-        """Generate a simple title for the bouquet"""
+
+        """Generate a simple title for the generated bouquet using gpt-4o model"""
+
+
         response = self.client.chat.completions.create(
             model=settings.chat_model,
             messages=[{
@@ -121,10 +133,7 @@ Style: luxury editorial photography for high-end botanical magazine, museum-qual
     
     def _analyze_composition(self, images: List[bytes], flower_description: str) -> str:
         """Analyze the composition and arrangement style from the uploaded images"""
-        # Convert images to base64 (use only first 3 images to stay within token limits)
-        encoded_images = [base64.b64encode(img).decode('utf-8') for img in images[:3]]
-        
-        # Create prompt for composition analysis
+        # Use ALL uploaded images for comprehensive composition analysis
         content = [{"type": "text", "text": f"""Given these flower images and the description: '{flower_description}',
         suggest a natural bouquet arrangement style that would look realistic with these flowers.
         Consider:
@@ -134,19 +143,22 @@ Style: luxury editorial photography for high-end botanical magazine, museum-qual
         4. Suitable complementary greenery or filler flowers
         5. Specify which flowers should be prominent/focal and which should be supporting
         
-        Keep your response concise (max 100 words) as it will be used in an image generation prompt."""}]
+        Provide detailed composition guidance (max 150 words) as it will be used in an image generation prompt."""}]
         
-        for encoded_image in encoded_images:
+        # Process ALL images with correct MIME type detection
+        for image_bytes in images:
+            encoded_image = base64.b64encode(image_bytes).decode('utf-8')
+            mime_type = self._detect_image_format(image_bytes)
             content.append({
                 "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}
+                "image_url": {"url": f"data:{mime_type};base64,{encoded_image}"}
             })
         
-        # Get composition analysis
+        # Get composition analysis with increased token limit for more images
         response = self.client.chat.completions.create(
             model=settings.vision_model,
             messages=[{"role": "user", "content": content}],
-            max_tokens=250
+            max_tokens=400
         )
         
         return response.choices[0].message.content.strip()
