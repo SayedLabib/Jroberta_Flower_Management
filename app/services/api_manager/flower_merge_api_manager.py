@@ -11,6 +11,21 @@ class FlowerMergeAPIManager:
     def __init__(self):
         self.client = openai.OpenAI(api_key=settings.open_ai_api_key)
     
+    def _detect_image_format(self, image_bytes: bytes) -> str:
+        """Detect image format from bytes and return appropriate MIME type"""
+        # Check magic bytes to determine image format
+        if image_bytes.startswith(b'\xff\xd8\xff'):
+            return "image/jpeg"
+        elif image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+            return "image/png"
+        elif image_bytes.startswith(b'GIF87a') or image_bytes.startswith(b'GIF89a'):
+            return "image/gif"
+        elif image_bytes.startswith(b'RIFF') and b'WEBP' in image_bytes[:12]:
+            return "image/webp"
+        else:
+            # Default to JPEG if format cannot be determined
+            return "image/jpeg"
+    
     def _validate_images(self, images: List[bytes]) -> None:
         """Validate uploaded images"""
         if len(images) < settings.min_images_per_request:
@@ -25,10 +40,7 @@ class FlowerMergeAPIManager:
     
     def _analyze_flowers(self, images: List[bytes]) -> str:
         """Analyze flower images and return detailed description"""
-        # Convert images to base64
-        encoded_images = [base64.b64encode(img).decode('utf-8') for img in images]
-        
-        # Create detailed prompt for flower analysis
+        # Convert images to base64 with correct MIME types
         content = [{"type": "text", "text": """Analyze these flowers in extreme detail for a flower arrangement:
         1. Identify each flower species precisely (e.g., 'garden rose' instead of just 'rose')
         2. Describe the exact color shade (e.g., 'pale dusty pink' instead of just 'pink')
@@ -38,10 +50,12 @@ class FlowerMergeAPIManager:
         Format your response as: 'flower1 - detailed color description, flower2 - detailed color description, etc.'
         Be extremely specific about colors as this will be used to generate a realistic image."""}]
         
-        for encoded_image in encoded_images:
+        for image_bytes in images:
+            encoded_image = base64.b64encode(image_bytes).decode('utf-8')
+            mime_type = self._detect_image_format(image_bytes)
             content.append({
                 "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}
+                "image_url": {"url": f"data:{mime_type};base64,{encoded_image}"}
             })
         
         # Get flower analysis with increased token limit for more details
@@ -54,27 +68,29 @@ class FlowerMergeAPIManager:
         return response.choices[0].message.content.strip()
     
     def _generate_bouquet_image(self, flower_description: str) -> str:
-        """Generate bouquet image using DALL-E"""
-        prompt = f"""Photorealistic photograph of a fresh flower bouquet taken by a professional botanical photographer.
-                    8K ultra high-definition, shot with a Canon EOS R5, natural soft window lighting, shallow depth of field.
-                    
-                    The bouquet features exactly: {flower_description}
-                    
-                    Key photographic elements:
-                    - Extremely natural arrangement that looks hand-assembled by a skilled florist
-                    - Hyper-detailed textures showing individual petal veins and natural imperfections
-                    - Subtle color transitions with accurate botanical coloration (no artificial saturation)
-                    - Water droplets visible on some petals for freshness
-                    - Stems wrapped in simple cream floral paper with minimal styling
-                    - Shot against a neutral cream background with natural shadows
-                    
-                    This must be an ultra-realistic photograph of real flowers with botanical accuracy. Show the bouquet from a 3/4 angle to capture both the front arrangement and some side detail."""
+        """Generate bouquet image using DALL-E with enhanced prompt"""
+        # Create a highly detailed, farbished prompt within 1500 character limit
+        base_prompt = f"""Award-winning studio photograph of an exquisite fresh flower bouquet: {flower_description}
 
+Photography: Canon EOS R5, 85mm macro lens, f/2.8, professional studio lighting with softbox diffusion, ultra-sharp 8K resolution, shallow depth of field creating beautiful bokeh. Composition: elegant 3/4 angle showcasing natural depth, dimensional layering, and organic asymmetrical balance.
+
+Styling: Hand-crafted artisanal arrangement by master florist with organic flow, premium technique showing natural movement. Delicate pearl-white silk ribbon wrap with subtle texture. Background: seamless pearl-gray gradient with subtle rim lighting creating gentle shadows and highlighting flower edges.
+
+Details: Morning dew droplets on select petals for freshness, natural color saturation without artificial enhancement, botanical accuracy with visible individual petal veins and textures, authentic stem placement showing natural growth patterns. Each flower positioned to catch light beautifully.
+
+Style: luxury editorial photography for high-end botanical magazine, museum-quality floral art, commercial perfection with artistic soul, hyper-realistic rendering showing every natural imperfection that makes flowers beautiful."""
+        
+        # Ensure we stay under 1500 characters for better quality
+        if len(base_prompt) > 1500:
+            base_prompt = base_prompt[:1497] + "..."
+        
+        print(f"DEBUG: Final prompt length: {len(base_prompt)} characters")
+        
         try:
             # Try DALL-E 3 first
             response = self.client.images.generate(
                 model=settings.image_model_primary,
-                prompt=prompt,
+                prompt=base_prompt,
                 size="1024x1024",
                 quality="hd",
                 style="natural"
@@ -85,7 +101,7 @@ class FlowerMergeAPIManager:
             # Fallback to DALL-E 2
             response = self.client.images.generate(
                 model=settings.image_model_fallback,
-                prompt=prompt,
+                prompt=base_prompt,
                 size="1024x1024"
             )
             return response.data[0].url
