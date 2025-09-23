@@ -77,6 +77,7 @@ class FlowerMergeAPIManager:
         """ The prompt has been enhanced using the flower description which is holding the extracted flower details"""
 
         # Create optimized farbished prompt within OpenAI's 1000-character hard limit
+        
         base_prompt = f"""Award-winning studio photograph: {flower_description}
 
 Canon EOS R5, 85mm macro, f/2.8, professional lighting, 8K ultra-sharp, shallow depth of field, beautiful bokeh. Elegant 3/4 angle, natural depth, dimensional layers, organic asymmetry.
@@ -132,8 +133,11 @@ Luxury editorial style, high-end botanical magazine quality, museum-grade floral
         return response.choices[0].message.content.strip().strip('"\'')
     
     def _analyze_composition(self, images: List[bytes], flower_description: str) -> str:
+
         """Analyze the composition and arrangement style from the uploaded images"""
         # Use ALL uploaded images for comprehensive composition analysis
+
+
         content = [{"type": "text", "text": f"""Given these flower images and the description: '{flower_description}',
         suggest a natural bouquet arrangement style that would look realistic with these flowers.
         Consider:
