@@ -9,4 +9,5 @@ aiohttp
 pydantic-settings
 httpx
 pillow
+google-generativeai
 pydantic[email]

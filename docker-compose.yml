@@ -12,11 +12,16 @@ services:
       - "8066:8066"
     environment:
       - OPEN_AI_API_KEY=${OPEN_AI_API_KEY}
-      - OPEN_AI_MODEL=${OPEN_AI_MODEL:-gpt-4o}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - VISION_MODEL=${VISION_MODEL:-gpt-4o}
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+      - IMAGE_MODEL_PRIMARY=${IMAGE_MODEL_PRIMARY:-dall-e-3}
+      - IMAGE_MODEL_FALLBACK=${IMAGE_MODEL_FALLBACK:-dall-e-2}
       - DEBUG=${DEBUG:-false}
-      - MIN_IMAGES_PER_REQUEST=${MIN_IMAGES_PER_REQUEST:-4}
+      - MIN_IMAGES_PER_REQUEST=${MIN_IMAGES_PER_REQUEST:-1}  # Updated to 1 for flower merge
       - MAX_IMAGES_PER_REQUEST=${MAX_IMAGES_PER_REQUEST:-6}
       - MAX_FILE_SIZE=${MAX_FILE_SIZE:-10485760}  # 10MB default
+      - MAX_REQUEST_SIZE=${MAX_REQUEST_SIZE:-157286400}  # 150MB default
     volumes:
       # Mount app directory for development (optional - remove for production)
       - ./app:/app/app:ro

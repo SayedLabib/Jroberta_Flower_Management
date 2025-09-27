@@ -34,6 +34,12 @@ class FlowerMergeAPIManager:
         if len(images) > settings.max_images_per_request:
             raise ValueError(f"Too many images. Maximum is {settings.max_images_per_request}")
         
+        # Check total request size
+        total_size = sum(len(image_bytes) for image_bytes in images)
+        if total_size > settings.max_request_size:
+            max_size_mb = settings.max_request_size / (1024 * 1024)
+            raise ValueError(f"Total request size too large. Maximum is {max_size_mb}MB")
+        
         for image_bytes in images:
             if len(image_bytes) > settings.max_file_size:
                 raise ValueError(f"Image too large. Maximum size is {settings.max_file_size} bytes")
@@ -41,17 +47,9 @@ class FlowerMergeAPIManager:
     """Used GPT 4 vision model for better extraction of flower details"""
 
     def _analyze_flowers(self, images: List[bytes]) -> str:
+        """Analyze flower images and return detailed but concise description"""
         
-        """Analyze flower images and return detailed description"""
-     
-        content = [{"type": "text", "text": """Analyze these flowers in extreme detail for a flower arrangement:
-        1. Identify each flower species precisely (e.g., 'garden rose' instead of just 'rose')
-        2. Describe the exact color shade (e.g., 'pale dusty pink' instead of just 'pink')
-        3. Note any notable textures or petal formations
-        4. Estimate the approximate size/scale
-        
-        Format your response as: 'flower1 - detailed color description, flower2 - detailed color description, etc.'
-        Be extremely specific about colors as this will be used to generate a realistic image."""}]
+        content = [{"type": "text", "text": "Identify each flower type with exact colors and key characteristics. Format: 'deep red roses with velvety petals, soft pink peonies, white baby's breath, purple lavender stems'. Be specific about flower types and accurate color descriptions."}]
         
         for image_bytes in images:
             encoded_image = base64.b64encode(image_bytes).decode('utf-8')
@@ -66,33 +64,19 @@ class FlowerMergeAPIManager:
         response = self.client.chat.completions.create(
             model=settings.vision_model,
             messages=[{"role": "user", "content": content}],
-            max_tokens=600
+            max_tokens=300
         )
         
         return response.choices[0].message.content.strip()
     
     def _generate_bouquet_image(self, flower_description: str) -> str:
-
-
-        """ The prompt has been enhanced using the flower description which is holding the extracted flower details"""
-
-        # Create optimized farbished prompt within OpenAI's 1000-character hard limit
+        """Generate bouquet image with simple, realistic prompt"""
         
-        base_prompt = f"""Award-winning studio photograph: {flower_description}
-
-Canon EOS R5, 85mm macro, f/2.8, professional lighting, 8K ultra-sharp, shallow depth of field, beautiful bokeh. Elegant 3/4 angle, natural depth, dimensional layers, organic asymmetry.
-
-Master florist artisanal arrangement, organic flow, premium technique, natural movement. Pearl-white silk ribbon, subtle texture. Pearl-gray gradient background, rim lighting, gentle shadows, edge highlights.
-
-Morning dew droplets, natural saturation, botanical accuracy, visible petal veins, authentic textures, natural stem placement, perfect light positioning.
-
-Luxury editorial style, high-end botanical magazine quality, museum-grade floral art, commercial perfection with artistic soul, hyper-realistic with natural imperfections."""
+        # Simple 1-2 line prompt focusing on the essentials
+        base_prompt = f"Generate flower bouquet with {flower_description}, tied with white ribbon, professional photography with realistic flowers, soft natural lighting, clean background."
         
-        # Ensure we stay under OpenAI's 1000-character hard limit
-        if len(base_prompt) > 1000:
-            base_prompt = base_prompt[:997] + "..."
-        
-        print(f"DEBUG: Final prompt length: {len(base_prompt)} characters")
+        if settings.debug:
+            print(f"DEBUG: Final prompt length: {len(base_prompt)} characters")
         
         try:
             # Try DALL-E 3 first
@@ -117,55 +101,20 @@ Luxury editorial style, high-end botanical magazine quality, museum-grade floral
             return response.data[0].url
     
     def _generate_title(self, flower_description: str) -> str:
-
-        """Generate a simple title for the generated bouquet using gpt-4o model"""
-
-
+        """Generate a simple title for the bouquet"""
+        
         response = self.client.chat.completions.create(
             model=settings.chat_model,
             messages=[{
                 "role": "user",
-                "content": f"Create a short bouquet title (max 5 words) for: {flower_description}"
+                "content": f"Create a short bouquet title (max 4 words) for: {flower_description}"
             }],
-            max_tokens=20
+            max_tokens=15
         )
         
         return response.choices[0].message.content.strip().strip('"\'')
     
-    def _analyze_composition(self, images: List[bytes], flower_description: str) -> str:
 
-        """Analyze the composition and arrangement style from the uploaded images"""
-        # Use ALL uploaded images for comprehensive composition analysis
-
-
-        content = [{"type": "text", "text": f"""Given these flower images and the description: '{flower_description}',
-        suggest a natural bouquet arrangement style that would look realistic with these flowers.
-        Consider:
-        1. Overall shape (round, cascading, asymmetrical, etc.)
-        2. Color distribution - maintain the approximate color ratio/balance from the original images
-        3. Density and spacing of flowers
-        4. Suitable complementary greenery or filler flowers
-        5. Specify which flowers should be prominent/focal and which should be supporting
-        
-        Provide detailed composition guidance (max 150 words) as it will be used in an image generation prompt."""}]
-        
-        # Process ALL images with correct MIME type detection
-        for image_bytes in images:
-            encoded_image = base64.b64encode(image_bytes).decode('utf-8')
-            mime_type = self._detect_image_format(image_bytes)
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime_type};base64,{encoded_image}"}
-            })
-        
-        # Get composition analysis with increased token limit for more images
-        response = self.client.chat.completions.create(
-            model=settings.vision_model,
-            messages=[{"role": "user", "content": content}],
-            max_tokens=400
-        )
-        
-        return response.choices[0].message.content.strip()
     
     def merge_flowers(self, request: FlowerMergeRequest) -> FlowerMergeResponse:
         """Create a flower bouquet from uploaded images"""
@@ -181,14 +130,8 @@ Luxury editorial style, high-end botanical magazine quality, museum-grade floral
             if settings.debug:
                 print(f"Flowers identified: {flower_description}")
             
-            # Analyze composition style
-            composition_style = self._analyze_composition(request.images, flower_description)
-            if settings.debug:
-                print(f"Composition style: {composition_style}")
-            
-            # Generate bouquet image with enhanced prompt including composition
-            enhanced_description = f"{flower_description}. {composition_style}"
-            image_url = self._generate_bouquet_image(enhanced_description)
+            # Generate bouquet image
+            image_url = self._generate_bouquet_image(flower_description)
             if settings.debug:
                 print(f"Generated bouquet image: {image_url}")
             

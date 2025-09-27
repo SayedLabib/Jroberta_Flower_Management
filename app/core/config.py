@@ -4,6 +4,7 @@ from typing import Optional, List, Dict
 
 class Settings(BaseSettings):
     open_ai_api_key: str = Field(..., env="OPEN_AI_API_KEY")
+    gemini_api_key: str = Field(..., env="GEMINI_API_KEY")  # Added Gemini API key
     
     # AI Model configurations
     vision_model: str = Field("gpt-4o", env="VISION_MODEL")  # For flower analysis
@@ -15,9 +16,10 @@ class Settings(BaseSettings):
     debug: bool = Field(False, env="DEBUG")
 
     # Essential fields for multi image processing
-    min_images_per_request: int = Field(4, env="MIN_IMAGES_PER_REQUEST")
+    min_images_per_request: int = Field(1, env="MIN_IMAGES_PER_REQUEST")  # Changed to 1 for flower merge
     max_images_per_request: int = Field(6, env="MAX_IMAGES_PER_REQUEST")
     max_file_size: int = Field(10 * 1024 * 1024, env="MAX_FILE_SIZE")  # 10 MB
+    max_request_size: int = Field(150 * 1024 * 1024, env="MAX_REQUEST_SIZE")  # 50 MB total request size
 
     class Config:
         env_file = ".env"
@@ -26,4 +28,7 @@ class Settings(BaseSettings):
         extra = "ignore"
 
 settings = Settings()
+
+# Create a config alias for backward compatibility
+config = settings
 
