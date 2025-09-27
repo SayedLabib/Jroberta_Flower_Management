@@ -7,13 +7,13 @@ router = APIRouter(prefix="/flower-merge", tags=["Gemini Flower Merge"])
 
 
 @router.post("/generate", response_model=GeminiFlowerMergeResponse)
-async def generate_flower_composition(image_files: List[UploadFile] = File(...)):
-    if not image_files or len(image_files) < 1 or len(image_files) > 6:
+async def generate_flower_composition(images: List[UploadFile] = File(...)):
+    if not images or len(images) < 1 or len(images) > 6:
         raise HTTPException(status_code=400, detail="Provide 1-6 images")
-    
-    image_urls = await gemini_flower_merge_service.generate_flower_merge_image(image_files)
-    
+
+    image_urls = await gemini_flower_merge_service.generate_flower_merge_image(images)
+
     return GeminiFlowerMergeResponse(
-        success_message=f"Generated flower composition from {len(image_files)} images",
-        image_urls=image_urls
+        title=f"Generated flower bouquet",
+        imageURL=image_urls[0] if image_urls else None
     )

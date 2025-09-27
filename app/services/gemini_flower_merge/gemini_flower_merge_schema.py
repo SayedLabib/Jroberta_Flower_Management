@@ -1,7 +1,7 @@
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 
 class GeminiFlowerMergeResponse(BaseModel):
-    success_message: str
-    image_urls: List[str]
+    title: str = Field(..., description="Title of the merged flower image according to the flower theme with a beautiful theme")
+    imageURL: Optional[str] = Field(None, description="URL of the merged flower image")

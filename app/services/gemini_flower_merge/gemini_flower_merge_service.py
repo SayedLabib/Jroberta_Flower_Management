@@ -31,7 +31,7 @@ class GeminiFlowerMergeService:
         # Auto-delete after 10 minutes
         threading.Timer(600, lambda: os.remove(filepath) if os.path.exists(filepath) else None).start()
         
-        return f"http://localhost:8066/temp-generated-images/{filename}"
+        return f"https://ai.bloomistry.cloud/temp-generated-images/{filename}"
     
 
 
